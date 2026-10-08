@@ -1,0 +1,25 @@
+{
+  "name": "orbit-eps-jwst-simulator",
+  "version": "1.0.0",
+  "description": "3D Electrical Power System Simulator of the James Webb Space Telescope",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "JWST",
+    "electrical-power-systems",
+    "3D-visualization",
+    "Three.js",
+    "educational-simulator"
+  ],
+  "author": "Aerospace & Electrical Engineering Department",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "three": "^0.128.0"
+  },
+  "devDependencies": {}
+}

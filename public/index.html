@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORBIT-EPS: JWST 3D Electrical Power System Simulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        canvas { display: block; }
+        
+        /* Debug */
+        #debug { position: absolute; top: 20px; left: 20px; color: #0ff; font-size: 12px; z-index: 100; padding: 8px; background: rgba(0,0,0,0.8); border: 1px solid #0ff; }
+        
+        /* HUD Panel */
+        #hud-panel { position: absolute; top: 15px; right: 15px; width: 280px; max-height: 85vh; background: rgba(10, 14, 39, 0.92); border: 2px solid #00d9ff; border-radius: 8px; padding: 12px; overflow-y: auto; z-index: 50; }
+        .hud-header { text-align: center; margin-bottom: 10px; color: #00d9ff; border-bottom: 1px solid #00d9ff; padding-bottom: 8px; }
+        .hud-header h1 { font-size: 16px; }
+        .hud-header p { font-size: 11px; color: #888; margin-top: 2px; }
+        .hud-section { margin: 8px 0; padding: 8px; background: rgba(0, 50, 100, 0.3); border-radius: 4px; }
+        .hud-section h3 { font-size: 12px; color: #0ff; margin-bottom: 6px; }
+        .hud-value { display: flex; justify-content: space-between; font-size: 11px; margin: 3px 0; color: #0f0; }
+        .hud-value label { color: #0ff; }
+        .battery-bar { height: 12px; background: #111; border: 1px solid #0f0; margin: 4px 0; overflow: hidden; }
+        .battery-fill { height: 100%; background: linear-gradient(90deg, #0f0, #0a0); }
+        
+        /* Control Panel */
+        #control-panel { position: absolute; bottom: 15px; left: 15px; background: rgba(10, 14, 39, 0.92); border: 2px solid #00d9ff; border-radius: 8px; padding: 10px; width: 260px; z-index: 50; }
+        .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
+        .control-btn { padding: 8px; background: #1a3a5a; color: #0ff; border: 1px solid #0ff; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; }
+        .control-btn:hover { background: #2a5a8a; }
+        .control-slider { margin: 8px 0; }
+        .control-slider input { width: 100%; }
+        .control-slider label { font-size: 11px; color: #0ff; }
+        
+        /* Chatbot Panel */
+        #chatbot-panel { position: absolute; bottom: 15px; right: 15px; width: 260px; height: 280px; background: rgba(10, 14, 39, 0.92); border: 2px solid #667eea; border-radius: 8px; display: flex; flex-direction: column; z-index: 50; }
+        .chatbot-header { background: #667eea; color: white; padding: 8px; border-radius: 6px 6px 0 0; font-size: 12px; font-weight: bold; }
+        .chatbot-messages { flex: 1; overflow-y: auto; padding: 8px; font-size: 10px; color: #0f0; }
+        .chatbot-input-area { display: flex; gap: 4px; padding: 8px; border-top: 1px solid #667eea; }
+        .chatbot-input-area input { flex: 1; background: #1a1a2e; border: 1px solid #667eea; color: #0f0; padding: 4px; border-radius: 3px; font-size: 10px; }
+        .chatbot-input-area button { background: #667eea; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+        
+        /* Info text */
+        #info-text { position: absolute; bottom: 320px; right: 15px; color: #888; font-size: 10px; z-index: 50; text-align: right; }
+    </style>
+</head>
+<body>
+    <div id="debug">Starting ORBIT-EPS...</div>
+    
+    <!-- HUD Panel -->
+    <div id="hud-panel">
+        <div class="hud-header">
+            <h1>ORBIT-EPS</h1>
+            <p>James Webb Space Telescope</p>
+        </div>
+        <div class="hud-section">
+            <h3>☀️ SOLAR</h3>
+            <div class="hud-value"><label>V:</label><span id="solar-voltage">0.0</span> V</div>
+            <div class="hud-value"><label>I:</label><span id="solar-current">0.0</span> A</div>
+            <div class="hud-value"><label>P:</label><span id="solar-power">0.0</span> W</div>
+        </div>
+        <div class="hud-section">
+            <h3>🔌 BUS</h3>
+            <div class="hud-value"><label>V:</label><span id="bus-voltage">28.0</span> V</div>
+            <div class="hud-value"><label>Load:</label><span id="load-power">0.0</span> W</div>
+        </div>
+        <div class="hud-section">
+            <h3>🔋 BATTERY</h3>
+            <div class="battery-bar"><div class="battery-fill" id="battery-fill" style="width: 100%;"></div></div>
+            <div class="hud-value"><label>SOC:</label><span id="battery-soc">100</span> %</div>
+            <div class="hud-value"><label>I:</label><span id="battery-current">0.0</span> A</div>
+        </div>
+        <div class="hud-section">
+            <h3>STATUS</h3>
+            <div class="hud-value"><label>Mode:</label><span id="status-mode">DAYLIGHT</span></div>            <div class="hud-value"><label>Net Pwr:</label><span id="net-power">0.0</span> W</div>
+        </div>
+        <div class="hud-section">
+            <h3>EFFICIENCY</h3>
+            <div class="hud-value"><label>Array Eff:</label><span>28.5</span> %</div>
+            <div class="hud-value"><label>Conv Eff:</label><span>94.2</span> %</div>
+            <div class="hud-value"><label>Overall:</label><span id="overall-eff">26.8</span> %</div>        </div>
+    </div>
+    
+    <!-- Chatbot Panel -->
+    <div id="chatbot-panel">
+        <div class="chatbot-header">🤖 JWST Assistant</div>
+        <div class="chatbot-messages" id="chatbot-messages"></div>
+        <div class="chatbot-input-area">
+            <input type="text" id="chatbot-input" placeholder="Ask..." />
+            <button onclick="sendChatMessage()">→</button>
+        </div>
+    </div>
+    
+    <!-- Control Panel -->
+    <div id="control-panel">
+        <div style="color: #0ff; font-size: 12px; font-weight: bold; margin-bottom: 8px;">⚙️ CONTROLS</div>
+        <div class="control-grid">
+            <button class="control-btn" onclick="toggleEclipse()">🌑 ECLIPSE</button>
+            <button class="control-btn" onclick="resetSystem()">🔄 RESET</button>
+            <button class="control-btn" onclick="deploySolarPanels()">☀️ DEPLOY</button>
+            <button class="control-btn" onclick="rotateCam()">📷 CAM</button>
+        </div>
+
+        <div style="color: #0ff; font-size: 11px; margin: 6px 0; border-top: 1px solid #0ff; padding-top: 6px;">☀️ SOLAR PANEL CONTROL</div>
+        <div class="control-grid">
+            <button class="control-btn" onclick="trackSun()">🔁 TRACK SUN</button>
+            <button class="control-btn" onclick="maximizePower()">⚡ MAX PWR</button>
+            <button class="control-btn" onclick="resetPanels()">↺ RESET ANGLE</button>
+        </div>
+        <div class="control-grid">
+            <button class="control-btn" onclick="toggleOrbitMode()">🛰️ ELLIPSE</button>
+            <button class="control-btn" onclick="toggleChargingMode()">🔋 CHARGE MODE</button>
+        </div>
+        <div class="control-slider">
+            <label>Panel Angle:</label>
+            <input type="range" id="panel-slider" min="-90" max="90" value="15" onchange="adjustPanelAngle()" />
+            <span id="panel-display">15°</span>
+        </div>
+
+        <div style="color: #0ff; font-size: 11px; margin: 6px 0; border-top: 1px solid #0ff; padding-top: 6px;">🌍 EARTH VIEW</div>
+        <div class="control-grid">
+            <button class="control-btn" onclick="toggleEarth()">🌐 TOGGLE EARTH</button>
+            <button class="control-btn" onclick="toggleClouds()">☁️ TOGGLE CLOUDS</button>
+            <button class="control-btn" onclick="resetEarthView()">↺ RESET VIEW</button>
+        </div>
+        <div class="control-slider">
+            <label>Earth Rotation Speed:</label>
+            <input type="range" id="earth-speed" min="0" max="2" step="0.01" value="0.2" onchange="setEarthSpeed()" />
+            <span id="earth-speed-display">0.20</span>
+        </div>
+
+        <div class="control-slider">
+            <label>⚡ Load Power:</label>
+            <input type="range" id="load-slider" min="0" max="1000" value="300" onchange="updateLoad()" />
+            <span id="load-display">300 W</span>
+        </div>
+        <div class="control-slider">
+            <label>☀️ Solar Intensity:</label>
+            <input type="range" id="solar-slider" min="0" max="200" value="100" onchange="updateSolarIntensity()" />
+            <span id="solar-display">100 %</span>
+        </div>
+        <div class="control-slider">
+            <label>🌡️ Thermal Load:</label>
+            <input type="range" id="thermal-slider" min="0" max="100" value="30" onchange="updateThermalLoad()" />
+            <span id="thermal-display">30 %</span>
+        </div>
+        <div style="color: #888; font-size: 10px; margin-top: 8px;">
+            Deployed: <span id="deploy-status">No</span> | Track: <span id="track-status">OFF</span> | Temp: <span id="temp-status">Normal</span>
+        </div>
+        <div style="color: #888; font-size: 10px; margin-top: 6px;">
+            Orbit: <span id="orbit-status">CIRCULAR</span> | Charge: <span id="charge-status">OFF</span>
+        </div>
+    </div>
+    
+    <div id="info-text">
+        🖱️ Drag to rotate<br/>
+        🔄 Scroll to zoom
+    </div>
+    
+    <!-- Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        let scene, camera, renderer, jwst, controls;
+        let isEclipse = false;
+        let autoRotate = false;
+        let orbitMode = 'circular'; // 'circular' | 'ellipse'
+        let chargingMode = false;   // when true, satellite attempts to maximize charging
+        
+        // Power system
+        const powerState = {
+            solarVoltage: 60,
+            solarCurrent: 0,
+            solarPower: 0,
+            busVoltage: 28,
+            batterySOC: 1.0,
+            batteryCapacity: 1000, // Wh
+            loadPower: 300,
+            eclipse: false,
+            panelsDeployed: false,
+            solarIntensity: 1.0,
+            thermalLoad: 0.3,
+            panelAngle: 15,
+            trackingSun: false
+            ,chargingMode: false
+        };
+        
+        function initScene() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0e27);
+            scene.fog = new THREE.FogExp2(0x0a0e27, 0.00001);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100000);
+            camera.position.set(0, 50, 120);
+            camera.lookAt(0, 0, 0);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(100, 50, 100);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.set(2048, 2048);
+            scene.add(sunLight);
+            
+            // Starfield
+            createStarfield();
+            
+            // JWST
+            createJWST();
+            
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = true;
+            controls.zoomSpeed = 2;
+            controls.minDistance = 30;
+            controls.maxDistance = 500;
+            
+            debug.textContent = '✅ Scene initialized - JWST visible';
+            animate();
+        }
+        
+        function createStarfield() {
+            const starsGeom = new THREE.BufferGeometry();
+            const starCount = 2000;
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            
+            for (let i = 0; i < starCount * 3; i += 3) {
+                const phi = Math.random() * Math.PI * 2;
+                const theta = Math.acos(Math.random() * 2 - 1);
+                const radius = 1500;
+                
+                positions[i] = Math.sin(theta) * Math.cos(phi) * radius;
+                positions[i + 1] = Math.cos(theta) * radius;
+                positions[i + 2] = Math.sin(theta) * Math.sin(phi) * radius;
+                
+                const color = Math.random();
+                colors[i] = color;
+                colors[i + 1] = color;
+                colors[i + 2] = color;
+            }
+            
+            starsGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starsGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const starsMat = new THREE.PointsMaterial({
+                size: 0.5,
+                vertexColors: true,
+                sRGBColorSpace: true
+            });
+            
+            const stars = new THREE.Points(starsGeom, starsMat);
+            scene.add(stars);
+            
+            // ===== CREATE REALISTIC SUN =====
+            // Main sun sphere (larger for stronger visual presence)
+            const sunGeom = new THREE.SphereGeometry(40, 96, 96);
+            const sunMat = new THREE.MeshBasicMaterial({
+                color: 0xfdb813,
+                emissive: 0xfdb813,
+                emissiveIntensity: 2.2
+            });
+            const sun = new THREE.Mesh(sunGeom, sunMat);
+            sun.position.set(400, 200, 300);
+            scene.add(sun);
+
+            // Corona (outer glow)
+            const coronaGeom = new THREE.SphereGeometry(46, 48, 48);
+            const coronaMat = new THREE.MeshBasicMaterial({
+                color: 0xffb04d,
+                transparent: true,
+                opacity: 0.45,
+                emissive: 0xffb04d,
+                emissiveIntensity: 1.1
+            });
+            const corona = new THREE.Mesh(coronaGeom, coronaMat);
+            corona.position.copy(sun.position);
+            scene.add(corona);
+
+            // Outer halo (very transparent)
+            const haloGeom = new THREE.SphereGeometry(72, 48, 48);
+            const haloMat = new THREE.MeshBasicMaterial({
+                color: 0xffff66,
+                transparent: true,
+                opacity: 0.18,
+                emissive: 0xffcc66,
+                emissiveIntensity: 0.85
+            });
+            const halo = new THREE.Mesh(haloGeom, haloMat);
+            halo.position.copy(sun.position);
+            scene.add(halo);
+
+            // Add multiple point lights for realistic illumination (increased range)
+            const sunLight1 = new THREE.PointLight(0xffffff, 2.6, 1600);
+            sunLight1.position.copy(sun.position);
+            scene.add(sunLight1);
+
+            const sunLight2 = new THREE.PointLight(0xffaa44, 1.6, 1200);
+            sunLight2.position.copy(sun.position);
+            scene.add(sunLight2);
+            
+            // ===== CREATE DETAILED EARTH =====
+            // Uses example textures from threejs.org for diffuse/bump/specular and clouds
+            const loader = new THREE.TextureLoader();
+            const earthGeom = new THREE.SphereGeometry(50, 64, 64);
+            const earthMat = new THREE.MeshStandardMaterial({
+                map: loader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg'),
+                bumpMap: loader.load('https://threejs.org/examples/textures/planets/earth_bump_2048.jpg'),
+                bumpScale: 0.6,
+                specularMap: loader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg'),
+                metalness: 0.06,
+                roughness: 0.9
+            });
+            const earth = new THREE.Mesh(earthGeom, earthMat);
+            earth.position.set(-300, -150, -500);
+            earth.rotation.z = 0.3;
+            earth.castShadow = true;
+            earth.receiveShadow = true;
+            scene.add(earth);
+
+            // Atmosphere glow (thin outer layer)
+            const atmosphereGeom = new THREE.SphereGeometry(52, 64, 64);
+            const atmosphereMat = new THREE.MeshBasicMaterial({
+                color: 0x4a90ff,
+                transparent: true,
+                opacity: 0.12
+            });
+            const atmosphere = new THREE.Mesh(atmosphereGeom, atmosphereMat);
+            atmosphere.position.copy(earth.position);
+            scene.add(atmosphere);
+
+            // Clouds layer with alpha map
+            const cloudsGeom = new THREE.SphereGeometry(51, 64, 64);
+            const cloudsMat = new THREE.MeshStandardMaterial({
+                map: loader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png'),
+                transparent: true,
+                opacity: 0.8,
+                depthWrite: false
+            });
+            const clouds = new THREE.Mesh(cloudsGeom, cloudsMat);
+            clouds.position.copy(earth.position);
+            scene.add(clouds);
+
+            // Rotation speeds and visibility flags
+            earth.userData.rotationSpeed = 0.0002;
+            clouds.userData.rotationSpeed = 0.00035;
+            earth.userData.visible = true;
+            clouds.userData.visible = true;
+
+            // Store references for animation and control
+            scene.userData.earth = earth;
+            scene.userData.atmosphere = atmosphere;
+            scene.userData.clouds = clouds;
+            scene.userData.earth = earth;
+            scene.userData.clouds = clouds;
+            scene.userData.sun = sun;
+            scene.userData.corona = corona;
+            scene.userData.halo = halo;
+            
+            // Pulsing animation
+            sun.userData.originalScale = 30;
+            sun.userData.pulseSpeed = 0.0008;
+        }
+        
+        function createJWST() {
+            jwst = new THREE.Group();
+            jwst.name = 'Detailed Comms Satellite';
+
+            // ===== MATERIALS =====
+            const MAT = {
+                bus: new THREE.MeshStandardMaterial({ color: 0x222634, metalness: 0.6, roughness: 0.35 }),
+                composite: new THREE.MeshStandardMaterial({ color: 0x2b2f3a, metalness: 0.2, roughness: 0.5 }),
+                solar: new THREE.MeshStandardMaterial({ color: 0x66f0ff, metalness: 0.25, roughness: 0.25, emissive: 0x44ccff, emissiveIntensity: 0.45 }),
+                thermal: new THREE.MeshStandardMaterial({ color: 0xdadfe6, metalness: 0.1, roughness: 0.6 }),
+                battery: new THREE.MeshStandardMaterial({ color: 0xff7f33, metalness: 0.4, roughness: 0.35, emissive: 0xff3b00, emissiveIntensity: 0.35 }),
+                antenna: new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.85, roughness: 0.2 }),
+                fuel: new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.25, roughness: 0.7 }),
+                solarCell: new THREE.MeshStandardMaterial({ color: 0x66f0ff, metalness: 0.03, roughness: 0.35, emissive: 0x44ccff, emissiveIntensity: 0.12 })
+            };
+
+            // ===== CENTRAL BUS (Larger) =====
+            const centralBus = new THREE.Group();
+            centralBus.name = 'Central Bus';
+
+            const busGeom = new THREE.BoxGeometry(1.6, 2.2, 2.6);
+            const bus = new THREE.Mesh(busGeom, MAT.bus);
+            bus.castShadow = true;
+            bus.receiveShadow = true;
+            centralBus.add(bus);
+
+            // Structural truss frame (longitudinal beams)
+            const truss = new THREE.Group();
+            const beamGeom = new THREE.CylinderGeometry(0.03, 0.03, 3.2, 8);
+            for (let z = -1; z <= 1; z += 2) {
+                const beam = new THREE.Mesh(beamGeom, MAT.composite);
+                beam.position.set(z * 0.85, 0.0, 0);
+                beam.rotation.z = Math.PI / 2;
+                beam.castShadow = true;
+                truss.add(beam);
+            }
+            centralBus.add(truss);
+
+            // Add reinforced corner plates
+            const plateGeom = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+            for (let dx of [-0.75, 0.75]) for (let dy of [-1.0, 1.0]) for (let dz of [-1.1, 1.1]) {
+                const plate = new THREE.Mesh(plateGeom, MAT.antenna);
+                plate.position.set(dx, dy * 0.45, dz * 0.45);
+                plate.castShadow = true;
+                centralBus.add(plate);
+            }
+
+            // ===== FUEL TANKS (4 smaller tanks) =====
+            const tanksGroup = new THREE.Group();
+            for (let i = 0; i < 4; i++) {
+                const angle = (i / 4) * Math.PI * 2;
+                const tx = Math.cos(angle) * 0.9;
+                const tz = Math.sin(angle) * 0.9;
+                const tankGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.45, 12);
+                const tank = new THREE.Mesh(tankGeom, MAT.fuel);
+                tank.position.set(tx, -0.9, tz);
+                tank.rotation.x = Math.PI / 2;
+                tank.castShadow = true;
+                tanksGroup.add(tank);
+            }
+            centralBus.add(tanksGroup);
+
+            // ===== BATTERY MODULE (Detailed pack) =====
+            const batteryGroup = new THREE.Group();
+            const battGeom = new THREE.BoxGeometry(0.6, 0.45, 0.5);
+            const batt = new THREE.Mesh(battGeom, MAT.battery);
+            batt.position.set(0, 0.2, 1.0);
+            batt.castShadow = true;
+            batteryGroup.add(batt);
+
+            // Battery casing vents
+            const ventGeom = new THREE.BoxGeometry(0.05, 0.02, 0.45);
+            for (let i = -1; i <= 1; i += 2) {
+                const vent = new THREE.Mesh(ventGeom, MAT.thermal);
+                vent.position.set(i * 0.25, 0.05, 1.0);
+                vent.castShadow = true;
+                batteryGroup.add(vent);
+            }
+            centralBus.add(batteryGroup);
+
+            // ===== RADIATORS =====
+            const radGeom = new THREE.BoxGeometry(0.12, 1.6, 2.2);
+            for (let side = -1; side <= 1; side += 2) {
+                const rad = new THREE.Mesh(radGeom, MAT.thermal);
+                rad.position.x = side * 1.0;
+                rad.position.y = 0.0;
+                rad.castShadow = true;
+                centralBus.add(rad);
+            }
+
+            // ===== SOLAR ARRAYS (More segmented, higher detail) =====
+            const solarArrays = new THREE.Group();
+            solarArrays.name = 'Solar Arrays';
+            for (let side = -1; side <= 1; side += 2) {
+                const base = new THREE.Group();
+                base.position.set(side * 1.6, 0.9, 0);
+                // three-segment panel
+                for (let seg = 0; seg < 3; seg++) {
+                    const segGeom = new THREE.BoxGeometry(0.9, 1.2, 0.04);
+                    const segMesh = new THREE.Mesh(segGeom, MAT.solarCell);
+                    segMesh.position.set(side * (seg * 0.95), 0, -0.05 * seg);
+                    segMesh.castShadow = true;
+                    base.add(segMesh);
+                }
+                // boom
+                const boomGeom = new THREE.CylinderGeometry(0.05, 0.05, 1.6, 8);
+                const boom = new THREE.Mesh(boomGeom, MAT.antenna);
+                boom.position.set(side * 0.8, 0.9, 0);
+                boom.rotation.z = Math.PI / 2;
+                base.add(boom);
+                // gimbal
+                const gimbal = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), MAT.antenna);
+                gimbal.position.set(side * 0.15, 0.9, 0);
+                base.add(gimbal);
+                base.userData.side = side;
+                solarArrays.add(base);
+            }
+            jwst.userData.solarArrays = solarArrays;
+            jwst.add(solarArrays);
+
+            // ===== HIGH-GAIN ANTENNA (Larger) =====
+            const antennaPrimary = new THREE.Group();
+            antennaPrimary.position.set(0, 1.2, -1.6);
+            antennaPrimary.name = 'Primary Antenna';
+            const dishGeom = new THREE.ConeGeometry(0.5, 0.6, 32);
+            const dish = new THREE.Mesh(dishGeom, MAT.antenna);
+            dish.rotation.x = Math.PI;
+            dish.castShadow = true;
+            antennaPrimary.add(dish);
+            const backPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.05, 32), MAT.antenna);
+            backPlate.position.z = -0.3;
+            antennaPrimary.add(backPlate);
+            centralBus.add(antennaPrimary);
+
+            // ===== SECONDARY ANTENNAS & STAR TRACKERS =====
+            const antennasSecondary = new THREE.Group();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const x = Math.cos(angle) * 1.0;
+                const z = Math.sin(angle) * 1.0;
+                const horn = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 12), MAT.antenna);
+                horn.position.set(x, 0.9, z);
+                horn.rotation.y = angle;
+                horn.castShadow = true;
+                antennasSecondary.add(horn);
+            }
+            // star trackers (small cubes)
+            for (let i = 0; i < 4; i++) {
+                const st = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.08), MAT.antenna);
+                st.position.set((i - 1.5) * 0.4, 1.25, -0.2);
+                st.castShadow = true;
+                centralBus.add(st);
+            }
+            centralBus.add(antennasSecondary);
+
+            // ===== PAYLOAD DOCK / OPTICAL PAYLOAD =====
+            const payload = new THREE.Group();
+            const payloadGeom = new THREE.BoxGeometry(0.6, 0.4, 0.9);
+            const payloadMesh = new THREE.Mesh(payloadGeom, MAT.composite);
+            payloadMesh.position.set(0, 0.6, 1.4);
+            payloadMesh.castShadow = true;
+            payload.add(payloadMesh);
+            centralBus.add(payload);
+
+            // ===== THRUSTERS (small nozzles) =====
+            const thrusters = new THREE.Group();
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const tx = Math.cos(angle) * 0.7;
+                const tz = Math.sin(angle) * 0.7;
+                const thrGeom = new THREE.ConeGeometry(0.06, 0.18, 8);
+                const thr = new THREE.Mesh(thrGeom, MAT.fuel);
+                thr.position.set(tx, -1.0, tz);
+                thr.rotation.x = Math.PI;
+                thr.castShadow = true;
+                thrusters.add(thr);
+            }
+            centralBus.add(thrusters);
+
+            // ===== SENSORS & INSTRUMENTS =====
+            const sensors = new THREE.Group();
+            const sensorPositions = [
+                { pos: [-0.5, -0.6, 1.0], size: [0.25, 0.12, 0.12] },
+                { pos: [0.5, -0.6, 1.0], size: [0.25, 0.12, 0.12] },
+                { pos: [0, -0.9, -1.0], size: [0.18, 0.12, 0.18] }
+            ];
+            for (let s of sensorPositions) {
+                const geom = new THREE.BoxGeometry(...s.size);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x2e2e2e, metalness: 0.6, roughness: 0.3 });
+                const m = new THREE.Mesh(geom, mat);
+                m.position.set(...s.pos);
+                m.castShadow = true;
+                sensors.add(m);
+            }
+            centralBus.add(sensors);
+
+            // ===== REACTION WHEELS (4-axis cluster) =====
+            const reactionWheels = new THREE.Group();
+            for (let i = 0; i < 4; i++) {
+                const wheelGeom = new THREE.CylinderGeometry(0.16, 0.16, 0.12, 20);
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.85, roughness: 0.2 });
+                const wheel = new THREE.Mesh(wheelGeom, wheelMat);
+                wheel.position.set(-0.6 + (i * 0.4), -0.4, 0);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.castShadow = true;
+                reactionWheels.add(wheel);
+            }
+            centralBus.add(reactionWheels);
+
+            // ===== POWER HARNESS (more complex routing) =====
+            const powerHarness = new THREE.Group();
+            const cable1Geom = new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(2.0, 0.5, 0), new THREE.Vector3(0, 0.2, 1.0)), 8, 0.015, 6, 4);
+            const cable1 = new THREE.Mesh(cable1Geom, new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.4 }));
+            cable1.castShadow = true;
+            powerHarness.add(cable1);
+            centralBus.add(powerHarness);
+
+            // Attach central bus to JWST
+            jwst.add(centralBus);
+
+            // ===== SCALE & POSITION (Larger satellite) =====
+            jwst.scale.set(6.0, 6.0, 6.0);
+            jwst.position.set(0, 0, 0);
+
+            // Expose some references for UI control
+            jwst.userData.centralBus = centralBus;
+            jwst.userData.solarBases = solarArrays;
+            jwst.userData.payload = payload;
+
+            scene.add(jwst);
+
+            console.log('🛰️ Enhanced Satellite Created:', {
+                components: 'many',
+                solarPanels: 6,
+                antennas: 8,
+                radiators: 2,
+                fuelTanks: 4,
+                reactionWheels: 4
+            });
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Orbit handling and JWST motion
+            if (jwst) {
+                if (orbitMode === 'ellipse') {
+                    // Elliptical orbit path in XZ plane
+                    const t = Date.now() * 0.00012;
+                    const a = 320; // semi-major
+                    const b = 180; // semi-minor
+                    const x = a * Math.cos(t);
+                    const z = b * Math.sin(t);
+                    jwst.position.set(x, Math.sin(t * 3) * 3, z);
+                    // Keep the satellite pointed roughly toward the Sun when in ellipse mode
+                    if (scene.userData.sun) jwst.lookAt(scene.userData.sun.position);
+                } else {
+                    // Local station-keeping / idle float
+                    jwst.rotation.y += 0.0005;
+                    jwst.position.y = Math.sin(Date.now() * 0.0003) * 2;
+                }
+            }
+            
+            // Auto-rotate if enabled
+            if (autoRotate && jwst) {
+                jwst.rotation.z += 0.002;
+            }
+            
+            // Animate Earth and clouds using configurable speeds
+            if (scene.userData.earth) {
+                const e = scene.userData.earth;
+                const speed = (e.userData && e.userData.rotationSpeed) ? e.userData.rotationSpeed : 0.0002;
+                e.rotation.y += speed;
+            }
+            if (scene.userData.clouds) {
+                const c = scene.userData.clouds;
+                const cs = (c.userData && c.userData.rotationSpeed) ? c.userData.rotationSpeed : 0.0003;
+                c.rotation.y += cs;
+            }
+            
+            // Subtle sun pulsing animation
+            if (scene.userData.corona) {
+                const pulse = Math.sin(Date.now() * 0.001) * 0.5 + 1;
+                scene.userData.corona.scale.set(pulse, pulse, pulse);
+            }
+            
+            // Update power system every frame
+            updatePowerSystem();
+            updateHUD();
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        function updatePowerSystem() {
+            const time = Date.now() * 0.001; // seconds
+            
+            // Simulate day/night cycle if not in manual eclipse mode
+            const dayNightCycle = Math.sin(time * 0.2) * 0.5 + 0.5; // 0 to 1
+            
+            // Solar current based on sun angle, panel deployment, and intensity slider
+            const sunIntensity = isEclipse ? 0 : dayNightCycle * 0.9 + 0.1;
+            // If charging mode is active, force deployment and tracking
+            if (powerState.chargingMode) {
+                powerState.panelsDeployed = true;
+                powerState.trackingSun = true;
+                // encourage higher effective intensity (simulates active power-management)
+                powerState.solarIntensity = Math.max(powerState.solarIntensity, 140);
+            }
+            const deploymentBonus = powerState.panelsDeployed ? 1.3 : 1.0; // 30% boost when deployed
+            
+            // Panel angle efficiency (maximum at 0°, decreases at other angles)
+            const angleRadians = (powerState.panelAngle * Math.PI) / 180;
+            const angleEfficiency = Math.cos(angleRadians); // 0° = 1.0, ±90° = 0
+            
+            // Charging mode gives an extra practical boost to current (simulating MPPT/optimization)
+            const chargingBoost = powerState.chargingMode ? 1.5 : 1.0;
+            powerState.solarCurrent = 8 * sunIntensity * deploymentBonus * (powerState.solarIntensity / 100) * Math.max(0, angleEfficiency) * chargingBoost;
+            powerState.solarPower = powerState.solarVoltage * powerState.solarCurrent;
+            
+            // Power balance
+            const netPower = powerState.solarPower - powerState.loadPower;
+            
+            // Battery dynamics
+            const batteryCapacityWh = powerState.batteryCapacity;
+            const chargeRateWh = netPower / 3600; // Convert W to Wh/s
+            const chargePercent = chargeRateWh / (batteryCapacityWh / 100);
+            
+            const chargeMultiplier = powerState.chargingMode ? 5.0 : 1.0;
+            if (netPower > 0) {
+                // Charging (accelerated if in charging mode)
+                powerState.batterySOC = Math.min(1.0, powerState.batterySOC + chargePercent * 0.0001 * chargeMultiplier);
+            } else if (netPower < 0) {
+                // Discharging
+                powerState.batterySOC = Math.max(0.0, powerState.batterySOC + chargePercent * 0.0001);
+            }
+            
+            // Battery current (positive = charging, negative = discharging)
+            powerState.batteryCapacity = 1000 + Math.sin(time * 0.5) * 50; // Slight variation
+        }
+        
+        function updateHUD() {
+            // Update all HUD values with animation
+            const solarVolt = document.getElementById('solar-voltage');
+            const solarCurr = document.getElementById('solar-current');
+            const solarPow = document.getElementById('solar-power');
+            const busBatt = document.getElementById('battery-soc');
+            const battCurr = document.getElementById('battery-current');
+            const fillBar = document.getElementById('battery-fill');
+            const statusMode = document.getElementById('status-mode');
+            const loadDisp = document.getElementById('load-power');
+            const netPwrElem = document.getElementById('net-power');
+            const effElem = document.getElementById('overall-eff');
+            
+            // Smooth number updates
+            solarVolt.textContent = (powerState.solarVoltage + Math.sin(Date.now() * 0.001) * 0.5).toFixed(1);
+            solarCurr.textContent = powerState.solarCurrent.toFixed(2);
+            solarPow.textContent = powerState.solarPower.toFixed(0);
+            
+            const socPercent = (powerState.batterySOC * 100).toFixed(0);
+            busBatt.textContent = socPercent;
+            fillBar.style.width = socPercent + '%';
+            
+            // Battery current based on net power
+            const netPower = powerState.solarPower - powerState.loadPower;
+            battCurr.textContent = (netPower > 0 ? '+' : '') + (netPower / 28).toFixed(1);
+            netPwrElem.textContent = netPower.toFixed(0);
+            
+            // Efficiency calculation
+            const efficiency = powerState.solarPower > 0 ? ((powerState.loadPower / powerState.solarPower) * 100).toFixed(1) : 0;
+            effElem.textContent = efficiency;
+            
+            statusMode.textContent = isEclipse ? '🌑 ECLIPSE' : (powerState.solarCurrent > 5 ? '☀️ DAYLIGHT' : '🌙 TWILIGHT');
+            loadDisp.textContent = powerState.loadPower.toFixed(0) + ' W';
+
+            // Orbit and charge status indicators
+            const orbitStatus = document.getElementById('orbit-status');
+            const chargeStatus = document.getElementById('charge-status');
+            if (orbitStatus) orbitStatus.textContent = orbitMode === 'ellipse' ? 'ELLIPSE' : 'CIRCULAR';
+            if (chargeStatus) chargeStatus.textContent = powerState.chargingMode ? 'ON' : 'OFF';
+            
+            // Change battery fill color based on SOC
+            if (powerState.batterySOC < 0.2) {
+                fillBar.style.background = 'linear-gradient(90deg, #ff0000, #ff4400)';
+            } else if (powerState.batterySOC < 0.5) {
+                fillBar.style.background = 'linear-gradient(90deg, #ffaa00, #ff8800)';
+            } else {
+                fillBar.style.background = 'linear-gradient(90deg, #00ff00, #00cc00)';
+            }
+            
+            // Status light based on power health
+            if (netPower < -100) {
+                debug.textContent = '⚠️ DISCHARGING FAST';
+                debug.style.color = '#ff6600';
+            } else if (netPower > 100) {
+                debug.textContent = '✅ CHARGING';
+                debug.style.color = '#00ff00';
+            } else {
+                debug.textContent = '⚙️ BALANCED';
+                debug.style.color = '#00ffff';
+            }
+        }
+        
+        function toggleEclipse() {
+            isEclipse = !isEclipse;
+            debug.textContent = isEclipse ? 'ECLIPSE MODE' : 'DAYLIGHT MODE';
+        }
+
+        function toggleOrbitMode() {
+            orbitMode = (orbitMode === 'circular') ? 'ellipse' : 'circular';
+            const el = document.getElementById('orbit-status');
+            if (el) el.textContent = orbitMode === 'ellipse' ? 'ELLIPSE' : 'CIRCULAR';
+            debug.textContent = orbitMode === 'ellipse' ? 'Orbit: ELLIPSE mode' : 'Orbit: CIRCULAR mode';
+        }
+
+        function toggleChargingMode() {
+            powerState.chargingMode = !powerState.chargingMode;
+            const el = document.getElementById('charge-status');
+            if (el) el.textContent = powerState.chargingMode ? 'ON' : 'OFF';
+            if (powerState.chargingMode) {
+                // Force panels and tracking to try to charge
+                powerState.panelsDeployed = true;
+                powerState.trackingSun = true;
+                document.getElementById('deploy-status').textContent = 'YES';
+                document.getElementById('track-status').textContent = 'ON';
+                debug.textContent = '🔋 Charging Mode ACTIVE — optimizing power';
+            } else {
+                debug.textContent = '🔋 Charging Mode OFF';
+            }
+        }
+        
+        function resetSystem() {
+            // Full scene teardown and reinitialize to a clean state
+            try {
+                // Dispose geometries, materials and textures
+                if (scene) {
+                    scene.traverse(function (obj) {
+                        if (!obj) return;
+                        if (obj.geometry) {
+                            try { obj.geometry.dispose(); } catch (e) {}
+                        }
+                        if (obj.material) {
+                            try {
+                                if (Array.isArray(obj.material)) {
+                                    obj.material.forEach(m => {
+                                        if (m.map) try { m.map.dispose(); } catch (e) {}
+                                        try { m.dispose(); } catch (e) {}
+                                    });
+                                } else {
+                                    if (obj.material.map) try { obj.material.map.dispose(); } catch (e) {}
+                                    try { obj.material.dispose(); } catch (e) {}
+                                }
+                            } catch (e) {}
+                        }
+                    });
+                }
+
+                // Dispose renderer and remove canvas
+                if (renderer) {
+                    try { renderer.forceContextLoss && renderer.forceContextLoss(); } catch (e) {}
+                    try { renderer.domElement && renderer.domElement.remove(); } catch (e) {}
+                    try { renderer.dispose(); } catch (e) {}
+                }
+            } catch (err) {
+                console.warn('Error during reset cleanup', err);
+            }
+
+            // Reset runtime variables
+            scene = null;
+            camera = null;
+            controls = null;
+            jwst = null;
+            isEclipse = false;
+            autoRotate = false;
+            orbitMode = 'circular';
+
+            // Reset power state to sensible defaults and UI widgets
+            powerState.solarVoltage = 60;
+            powerState.solarCurrent = 0;
+            powerState.solarPower = 0;
+            powerState.busVoltage = 28;
+            powerState.batterySOC = 1.0;
+            powerState.batteryCapacity = 1000;
+            powerState.loadPower = 300;
+            powerState.eclipse = false;
+            powerState.panelsDeployed = false;
+            powerState.solarIntensity = 100;
+            powerState.thermalLoad = 0.3;
+            powerState.panelAngle = 15;
+            powerState.trackingSun = false;
+            powerState.chargingMode = false;
+
+            // Reset UI controls to defaults
+            try {
+                document.getElementById('panel-slider').value = 15;
+                document.getElementById('panel-display').textContent = '15°';
+                document.getElementById('earth-speed').value = 0.2;
+                document.getElementById('earth-speed-display').textContent = '0.20';
+                document.getElementById('load-slider').value = 300;
+                document.getElementById('load-display').textContent = '300 W';
+                document.getElementById('solar-slider').value = 100;
+                document.getElementById('solar-display').textContent = '100 %';
+                document.getElementById('thermal-slider').value = 30;
+                document.getElementById('thermal-display').textContent = '30 %';
+                document.getElementById('battery-fill').style.width = '100%';
+                document.getElementById('battery-soc').textContent = '100';
+                document.getElementById('solar-current').textContent = '0.00';
+                document.getElementById('solar-power').textContent = '0';
+                document.getElementById('solar-voltage').textContent = powerState.solarVoltage.toFixed(1);
+                document.getElementById('status-mode').textContent = 'RESET';
+                document.getElementById('deploy-status').textContent = 'No';
+                document.getElementById('track-status').textContent = 'OFF';
+                document.getElementById('orbit-status').textContent = 'CIRCULAR';
+                document.getElementById('charge-status').textContent = 'OFF';
+            } catch (e) {}
+
+            // Reinitialize the scene
+            setTimeout(function() {
+                initScene();
+                debug.textContent = '✅ Full system reset and scene reinitialized';
+            }, 50);
+        }
+        
+        function toggleDebug() {
+            autoRotate = !autoRotate;
+            debug.textContent = autoRotate ? 'Auto-rotate ON' : 'Auto-rotate OFF';
+        }
+        
+        function rotateCam() {
+            camera.position.set(100, 70, 100);
+            camera.lookAt(0, 0, 0);
+        }
+        
+        function deploySolarPanels() {
+            powerState.panelsDeployed = !powerState.panelsDeployed;
+            document.getElementById('deploy-status').textContent = powerState.panelsDeployed ? 'YES' : 'NO';
+            debug.textContent = powerState.panelsDeployed ? '📡 Panels DEPLOYED (+30% power)' : '📡 Panels RETRACTED';
+        }
+        
+        function updateSolarIntensity() {
+            powerState.solarIntensity = parseFloat(document.getElementById('solar-slider').value);
+            document.getElementById('solar-display').textContent = powerState.solarIntensity.toFixed(0) + ' %';
+        }
+        
+        function updateThermalLoad() {
+            powerState.thermalLoad = parseFloat(document.getElementById('thermal-slider').value) / 100;
+            const tempStatus = powerState.thermalLoad > 0.7 ? 'HOT ⚠️' : (powerState.thermalLoad > 0.4 ? 'WARM' : 'NORMAL ✅');
+            document.getElementById('thermal-display').textContent = (powerState.thermalLoad * 100).toFixed(0) + ' %';
+            document.getElementById('temp-status').textContent = tempStatus;
+        }
+        
+        function adjustPanelAngle() {
+            powerState.panelAngle = parseFloat(document.getElementById('panel-slider').value);
+            document.getElementById('panel-display').textContent = powerState.panelAngle + '°';
+            
+            // Rotate solar panels visually
+            if (jwst && jwst.userData.solarArrays) {
+                jwst.userData.solarArrays.rotation.z = (powerState.panelAngle * Math.PI) / 180;
+            }
+            
+            debug.textContent = '📐 Panel angle: ' + powerState.panelAngle + '° | Power: ' + (powerState.solarPower * Math.cos((powerState.panelAngle * Math.PI) / 180)).toFixed(0) + 'W';
+        }
+        
+        function trackSun() {
+            powerState.trackingSun = !powerState.trackingSun;
+            document.getElementById('track-status').textContent = powerState.trackingSun ? 'ON' : 'OFF';
+            debug.textContent = powerState.trackingSun ? '🔁 Sun tracking ACTIVE (max power)' : '🔁 Sun tracking disabled';
+            
+            if (powerState.trackingSun) {
+                // Auto-optimize panel angle for maximum power
+                powerState.panelAngle = 0;
+                document.getElementById('panel-slider').value = 0;
+                document.getElementById('panel-display').textContent = '0°';
+                
+                if (jwst && jwst.userData.solarArrays) {
+                    jwst.userData.solarArrays.rotation.z = 0;
+                }
+            }
+        }
+        
+        function maximizePower() {
+            // Set optimal angle for maximum solar collection
+            powerState.panelAngle = 0;
+            document.getElementById('panel-slider').value = 0;
+            document.getElementById('panel-display').textContent = '0°';
+            
+            if (jwst && jwst.userData.solarArrays) {
+                jwst.userData.solarArrays.rotation.z = 0;
+            }
+            
+            debug.textContent = '⚡ Panels optimized for maximum power collection';
+        }
+        
+        function resetPanels() {
+            powerState.panelAngle = 15;
+            powerState.trackingSun = false;
+            document.getElementById('panel-slider').value = 15;
+            document.getElementById('panel-display').textContent = '15°';
+            document.getElementById('track-status').textContent = 'OFF';
+
+            if (jwst && jwst.userData.solarArrays) {
+                jwst.userData.solarArrays.rotation.z = (15 * Math.PI) / 180;
+            }
+
+            debug.textContent = '↺ Solar panels reset to default angle';
+        }
+
+        function toggleEarth() {
+            if (!scene.userData.earth) return;
+            const e = scene.userData.earth;
+            const c = scene.userData.clouds;
+            e.visible = !e.visible;
+            if (c) c.visible = e.visible && c.userData.visible;
+            document.getElementById('deploy-status').textContent = e.visible ? 'Yes' : 'No';
+            debug.textContent = e.visible ? '🌍 Earth visible' : '🌍 Earth hidden';
+        }
+
+        function toggleClouds() {
+            if (!scene.userData.clouds) return;
+            const c = scene.userData.clouds;
+            c.visible = !c.visible;
+            c.userData.visible = c.visible;
+            document.getElementById('track-status').textContent = c.visible ? 'ON' : 'OFF';
+            debug.textContent = c.visible ? '☁️ Clouds visible' : '☁️ Clouds hidden';
+        }
+
+        function setEarthSpeed() {
+            const v = parseFloat(document.getElementById('earth-speed').value);
+            document.getElementById('earth-speed-display').textContent = v.toFixed(2);
+            if (scene.userData.earth) scene.userData.earth.userData.rotationSpeed = v * 0.001;
+            if (scene.userData.clouds) scene.userData.clouds.userData.rotationSpeed = v * 0.0015;
+        }
+
+        function resetEarthView() {
+            if (scene.userData.earth) scene.userData.earth.userData.rotationSpeed = 0.0002;
+            if (scene.userData.clouds) scene.userData.clouds.userData.rotationSpeed = 0.00035;
+            document.getElementById('earth-speed').value = 0.2;
+            document.getElementById('earth-speed-display').textContent = '0.20';
+            debug.textContent = '↺ Earth view reset';
+        }
+
+        function updateLoad() {
+            powerState.loadPower = parseFloat(document.getElementById('load-slider').value);
+            document.getElementById('load-display').textContent = powerState.loadPower.toFixed(0) + ' W';
+        }
+        
+        function sendChatMessage() {
+            const input = document.getElementById('chatbot-input');
+            const msg = input.value.trim().toLowerCase();
+            if (!msg) return;
+            
+            const messagesDiv = document.getElementById('chatbot-messages');
+            messagesDiv.innerHTML += '<div style="color: #0ff; margin: 4px 0;">You: ' + input.value + '</div>';
+            
+            // Comprehensive knowledge base and context-aware responses
+            let response = '';
+            const batPercent = (powerState.batterySOC * 100).toFixed(0);
+            const netPower = powerState.solarPower - powerState.loadPower;
+            
+            // POWER & BATTERY topics
+            if (msg.includes('power') && (msg.includes('how') || msg.includes('work') || msg.includes('flow'))) {
+                response = '⚡ Power flows: Sun → Solar Arrays → Charge Controller → Battery/Bus. P = V × I. Real-time: ' + powerState.solarPower.toFixed(0) + 'W generated, ' + powerState.loadPower + 'W consumed.';
+            } else if (msg.includes('battery') && (msg.includes('charge') || msg.includes('discharge'))) {
+                const action = netPower > 0 ? 'CHARGING ⬆️' : 'DISCHARGING ⬇️';
+                response = `🔋 Battery ${action} | SOC: ${batPercent}% | Net Power: ${netPower.toFixed(0)}W | Capacity: ${powerState.batteryCapacity.toFixed(0)}Wh`;
+            } else if (msg.includes('battery') || msg.includes('soc')) {
+                response = `🔋 Battery State of Charge: ${batPercent}% | Voltage: 28V | Capacity: 1000Wh | Critical: <20%, Warning: <50%`;
+            } else if (msg.includes('energy') || msg.includes('watt')) {
+                const efficiency = powerState.solarPower > 0 ? ((powerState.loadPower / powerState.solarPower) * 100).toFixed(1) : 0;
+                response = `⚡ Energy: Solar=${powerState.solarPower.toFixed(0)}W | Load=${powerState.loadPower}W | Net=${netPower.toFixed(0)}W | Efficiency=${efficiency}%`;
+            } else if (msg.includes('power') || msg.includes('current') || msg.includes('voltage')) {
+                response = `🔌 Power Bus: ${powerState.busVoltage}V | Solar I: ${powerState.solarCurrent.toFixed(2)}A | Solar V: ${powerState.solarVoltage}V | Power: ${powerState.solarPower.toFixed(0)}W`;
+            }
+            // SOLAR PANELS & TRACKING
+            else if (msg.includes('panel') && (msg.includes('angle') || msg.includes('rotation'))) {
+                const angleEff = Math.cos((powerState.panelAngle * Math.PI) / 180);
+                response = `📐 Panel Angle: ${powerState.panelAngle}° | Efficiency: ${(angleEff * 100).toFixed(1)}% | Cosine law: P_eff = P × cos(angle)`;
+            } else if (msg.includes('panel') && (msg.includes('deploy') || msg.includes('fold'))) {
+                const bonus = powerState.panelsDeployed ? '+30% power bonus' : 'no bonus';
+                response = `📡 Panels: ${powerState.panelsDeployed ? 'DEPLOYED ✓' : 'RETRACTED'} (${bonus}) | Boom Length: 1.6m per side`;
+            } else if (msg.includes('track') || msg.includes('sun tracking')) {
+                const mode = powerState.trackingSun ? 'ACTIVE (auto-optimal)' : 'MANUAL';
+                response = `🔁 Sun Tracking: ${mode} | Current Angle: ${powerState.panelAngle}° | 2-axis gimbal system for peak power`;
+            } else if (msg.includes('solar') || msg.includes('sun') || msg.includes('array')) {
+                const deployed = powerState.panelsDeployed ? 'DEPLOYED' : 'RETRACTED';
+                response = `☀️ Solar Arrays: ${deployed} | 6 segments total (3 per side) | Area: ~18m² | Efficiency: 28-30% typical`;
+            }
+            // THERMAL & HEAT
+            else if (msg.includes('thermal') || msg.includes('temperature') || msg.includes('heat')) {
+                const tempStatus = powerState.thermalLoad > 0.7 ? '🔴 HOT' : (powerState.thermalLoad > 0.4 ? '🟡 WARM' : '🟢 NORMAL');
+                response = `🌡️ Thermal Load: ${tempStatus} (${(powerState.thermalLoad * 100).toFixed(0)}%) | Radiators: 2×1.6m | Heat Dissipation: ${(powerState.thermalLoad * 500).toFixed(0)}W`;
+            }
+            // ECLIPSE & ORBITAL
+            else if (msg.includes('eclipse')) {
+                response = `🌑 Eclipse Mode: ${isEclipse ? '🔴 ACTIVE' : '🟢 INACTIVE'} | Battery provides backup power | LEO satellites: 40+ eclipses/day, ~35 min each`;
+            } else if (msg.includes('orbit') || msg.includes('ellipse') || msg.includes('circular')) {
+                const orbitType = orbitMode === 'ellipse' ? 'ELLIPTICAL' : 'CIRCULAR';
+                response = `🛰️ Orbit: ${orbitType} | Altitude: ~400km LEO | Period: ~90min | Speed: ~7.7 km/s | Max eclipse: 37min`;
+            } else if (msg.includes('leo') || msg.includes('altitude')) {
+                response = `🌍 LEO (Low Earth Orbit): 200-2000km altitude | Orbital period: 90-120min | High radiation, dynamic thermal, 40+ eclipses/day`;
+            }
+            // CHARGING MODE
+            else if (msg.includes('charging') || msg.includes('charge mode')) {
+                response = `🔋 Charging Mode: ${powerState.chargingMode ? '✓ ACTIVE' : 'OFF'} | Auto-deploys panels, enables tracking, 5× charge boost | Use when battery low`;
+            }
+            // COMPONENTS
+            else if (msg.includes('thruster')) {
+                response = `🚀 Thrusters: 8× small nozzles (orientation control) | Fuel Tanks: 4× distributed | Propellant: Hydrazine or N2H4`;
+            } else if (msg.includes('antenna')) {
+                response = `📡 Antennas: High-gain dish (0.5m) + 6 low-gain backup | S-band/X-band | Data rate: 1-10 Mbps downlink`;
+            } else if (msg.includes('reaction wheel') || msg.includes('rw')) {
+                response = `⚙️ Reaction Wheels: 4-axis cluster | Momentum: ~100 Nms | Rate: 6000 rpm max | Attitude control to ±0.1°`;
+            } else if (msg.includes('payload')) {
+                response = `📷 Payload: Optical imaging instrument | Field of view: 45° | Resolution: 5-15m GSD | Power: 80-120W`;
+            }
+            // CONTROLS & UI
+            else if (msg.includes('how') && (msg.includes('control') || msg.includes('use') || msg.includes('button'))) {
+                response = `🎮 Controls: Sliders (load, solar intensity, thermal) | Buttons: DEPLOY, TRACK SUN, ECLIPSE, CHARGING | Orbit & reset modes | Drag to rotate view`;
+            } else if (msg.includes('button') && msg.includes('deploy')) {
+                response = `📡 DEPLOY: Extends solar arrays (+30% power bonus) | Increases drag & thermal exposure | Toggle to fold for thermal control`;
+            } else if (msg.includes('button') && msg.includes('track')) {
+                response = `🔁 TRACK SUN: Auto-aligns panels to sun direction (0° angle) | Maximizes solar power | Consumes attitude control authority`;
+            } else if (msg.includes('slider')) {
+                response = `🎚️ Sliders: Load Power (0-1000W) | Solar Intensity (0-200%) | Thermal Load (0-100%) | Earth Rotation Speed | Panel Angle (±90°)`;
+            }
+            // EFFICIENCY & SPECS
+            else if (msg.includes('efficiency') || msg.includes('efficient')) {
+                const sysEff = powerState.solarPower > 0 ? ((powerState.loadPower / powerState.solarPower) * 100).toFixed(1) : 0;
+                response = `⚡ Efficiency: Array 28.5% | MPPT 94.2% | Harness 97% | Overall System: ${sysEff}% | P_out/P_in`;
+            } else if (msg.includes('spec') || msg.includes('specification')) {
+                response = `📋 SPECIFICATIONS: Mass: 2000kg | Solar Array: 18m² @ 28.5% | Battery: 1000Wh | Bus: 28V DC | Radiators: 2×1.6m | Orbit: LEO 400km`;
+            }
+            // EDUCATION & THEORY
+            else if (msg.includes('cosine') || msg.includes('lambert')) {
+                response = `📐 Cosine Law: P(θ) = P₀ × cos(θ) | At 0°: 100%, 30°: 86.6%, 60°: 50% | Critical for panel angle optimization`;
+            } else if (msg.includes('pwm') || msg.includes('mppt')) {
+                response = `🔌 MPPT (Maximum Power Point Tracker): Adjusts V/I to maximize P = V×I | Efficiency: 94.2% typical | Prevents battery overvoltage`;
+            } else if (msg.includes('mission') || msg.includes('objective')) {
+                response = `🛰️ MISSION: Real-time EPS monitoring for educational & training purposes | Learn power management in LEO | Apply to CubeSat & commercial satellite design`;
+            } else if (msg.includes('radiation') || msg.includes('space weather')) {
+                response = `☢️ Radiation: LEO: ~200 mrem/day | Solar events increase ~10× | Affects: Solar cells, electronics | Mitigation: Shielding, redundancy`;
+            } else if (msg.includes('thermal')) {
+                response = `🌡️ Thermal Model: +120°C sun-side | -60°C shadow | Control via radiators, heat pipes, MLI (multi-layer insulation) | Balance solar absorption & IR emission`;
+            }
+            // GREETINGS & HELP
+            else if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) {
+                response = '👋 Welcome to ORBIT-EPS! 🛰️ I know everything about satellite power systems. Ask me about power, panels, orbits, efficiency, controls, components, or missions!';
+            } else if (msg.includes('help') || msg.includes('command')) {
+                response = '📖 Ask me: power, battery, solar panel, tracking, eclipse, thermal, thrusters, antenna, efficiency, orbit, controls, LEO, MPPT, cosine law, specifications, mission, or just chat!';
+            } else if (msg.includes('who') && msg.includes('you')) {
+                response = '🤖 I\'m ORBIT-EPS Assistant! I\'m trained on satellite EPS theory, orbital mechanics, power management, component specs, and thermal control. Ask anything!';
+            } else if (msg.includes('what') && (msg.includes('this') || msg.includes('app'))) {
+                response = '🛰️ ORBIT-EPS = Educational 3D Satellite Power System Simulator. Real-time power generation, battery SOC, thermal load, orbit modes, charging strategies. Learn EPS!';
+            } else if (msg.includes('favorite')) {
+                response = '⚡ My favorite topic is power management! The interplay between solar generation, battery storage, and load consumption during eclipse is fascinating.';
+            }
+            // JOKES & FUN
+            else if (msg.includes('joke')) {
+                const jokes = [
+                    '🤖 Why did the battery go to school? To improve its SOC! 😄',
+                    '☀️ What do you call a solar panel in space? A ray of hope! 🌞',
+                    '🛰️ Why don\'t satellites get lonely? They have too many connections! 📡'
+                ];
+                response = jokes[Math.floor(Math.random() * jokes.length)];
+            }
+            // CATCH-ALL: Comprehensive educational default responses
+            else {
+                const defaults = [
+                    '⚡ P = V × I. Your current solar power: ' + powerState.solarPower.toFixed(0) + 'W',
+                    '🔋 Battery SOC: ' + batPercent + '% | Try asking about power, panels, or efficiency!',
+                    '📡 ORBIT-EPS tracks: Power generation, battery state, thermal load, orbital mechanics, EPS components',
+                    '🛰️ LEO satellites orbit Earth every ~90 minutes, facing ~40 eclipses/day lasting up to 37 minutes each',
+                    '☀️ Solar panel efficiency depends on sun angle (cosine law): P(θ) = P₀ × cos(θ)',
+                    '🌡️ Thermal control: Radiators dissipate heat; Multi-Layer Insulation (MLI) minimizes radiation loss',
+                    '🚀 Reaction wheels enable 3-axis attitude control without propellant, using momentum exchange',
+                    '📊 Power balance: Net = Solar Power - Load Power. Positive = Charging, Negative = Discharging',
+                    '💡 MPPT (Maximum Power Point Tracker) finds optimal V/I to maximize power transfer efficiency',
+                    '🎯 Ask about: power, battery, solar, panels, eclipse, thermal, orbit, thrusters, antenna, efficiency, specs!'
+                ];
+                response = defaults[Math.floor(Math.random() * defaults.length)];
+            }
+            
+            messagesDiv.innerHTML += '<div style="color: #0f0; margin: 4px 0;">🤖: ' + response + '</div>';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            input.value = '';
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Chatbot input: send message on Enter key
+        document.getElementById('chatbot-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+        
+        // Start
+        initScene();
+    </script>
+</body>
+</html>
